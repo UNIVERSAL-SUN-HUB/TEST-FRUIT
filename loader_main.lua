@@ -80,7 +80,7 @@ local WeaponDropdown = MainTab:CreateDropdown({
     end
 })
 
--- Teleport Tab (FIXED WITH BUTTON)
+-- Teleport Tab
 local TeleportTab = Window:CreateTab("Teleport", "plane")
 
 local IslandDropdown = TeleportTab:CreateDropdown({
@@ -102,7 +102,7 @@ local TweenToggle = TeleportTab:CreateToggle({
     end
 })
 
--- THIS IS THE MISSING BUTTON - ADD THIS
+-- ADD THIS MISSING BUTTON
 local TeleportButton = TeleportTab:CreateButton({
     Name = "Teleport To Island",
     Callback = function()
@@ -117,8 +117,8 @@ local TeleportButton = TeleportTab:CreateButton({
     end
 })
 
--- Stats Tab
-local StatsTab = Window:CreateTab("Auto Stats", "chart")
+-- Stats Tab (FIXED ICON - was "chart", now "user")
+local StatsTab = Window:CreateTab("Auto Stats", "user")
 
 local AutoStatsToggle = StatsTab:CreateToggle({
     Name = "Auto Stats",
@@ -154,7 +154,6 @@ local NoClipToggle = MiscTab:CreateToggle({
 local FPSBoostButton = MiscTab:CreateButton({
     Name = "FPS Boost",
     Callback = function()
-        -- FPS Boost code
         local decalsyeeted = false
         local g = game
         local w = g.Workspace
