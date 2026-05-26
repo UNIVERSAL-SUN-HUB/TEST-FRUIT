@@ -1,4 +1,4 @@
--- Core.lua - Blox Fruits Hub (COMPLETE FIXED VERSION)
+-- Core.lua - Blox Fruits Hub (COMPLETE WORKING VERSION)
 local Core = {}
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -6,7 +6,6 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
 local VirtualUser = game:GetService("VirtualUser")
-local HttpService = game:GetService("HttpService")
 
 local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
@@ -29,21 +28,11 @@ local Settings = {
     FastAttack = false,
     AutoHaki = false,
     BringMob = true,
-    FarmMode = "Level Farm",
     Weapon = "Melee",
-    SafeFarm = true,
+    NoClip = false,
     AutoStats = false,
     StatType = "Melee",
-    NoClip = false,
-    ESP = {
-        Player = false,
-        Fruit = false,
-        Chest = false,
-        Flower = false,
-        Mob = false
-    },
     TweenToIsland = false,
-    TeleportToIsland = false,
     SelectedIsland = nil
 }
 
@@ -503,48 +492,6 @@ function Core:StartLoops()
     end)
 end
 
--- ESP Functions
-function Core:CreateESP(obj, color, name)
-    if not obj then return end
-    
-    local esp = Drawing.new("Text")
-    esp.Text = name or obj.Name
-    esp.Size = 16
-    esp.Color = color or Color3.new(1, 1, 1)
-    esp.Center = true
-    esp.Outline = true
-    esp.OutlineColor = Color3.new(0, 0, 0)
-    
-    table.insert(ESPObjects, {Object = obj, Drawing = esp})
-    return esp
-end
-
-function Core:UpdateESP()
-    for i, v in pairs(ESPObjects) do
-        if v.Object and v.Object.Parent then
-            local pos = v.Object.Position
-            local screenPos, onScreen = workspace.CurrentCamera:WorldToViewportPoint(pos)
-            
-            if onScreen then
-                v.Drawing.Position = Vector2.new(screenPos.X, screenPos.Y)
-                v.Drawing.Visible = true
-            else
-                v.Drawing.Visible = false
-            end
-        else
-            v.Drawing.Visible = false
-            table.remove(ESPObjects, i)
-        end
-    end
-end
-
-function Core:ClearESP()
-    for _, v in pairs(ESPObjects) do
-        v.Drawing:Remove()
-    end
-    ESPObjects = {}
-end
-
 -- Settings Functions
 function Core:SetAutoFarm(value)
     Settings.AutoFarm = value
@@ -597,12 +544,6 @@ end
 
 function Core:TweenToIsland(value)
     Settings.TweenToIsland = value
-    Settings.TeleportToIsland = false
-end
-
-function Core:TeleportToIsland(value)
-    Settings.TeleportToIsland = value
-    Settings.TweenToIsland = false
 end
 
 -- Island CFrames
