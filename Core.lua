@@ -207,13 +207,16 @@ function Core:TweenTo(cf, speed)
     end
     
     local dist = (cf.Position - HumanoidRootPart.Position).Magnitude
-    local tweenSpeed = speed or (dist / 300)
+    
+    -- Fix: If no specific time override is passed, dynamically calculate time for exactly 150 speed
+    local tweenSpeed = speed or (dist / 150)
     
     CurrentTween = TweenService:Create(HumanoidRootPart, TweenInfo.new(tweenSpeed, Enum.EasingStyle.Linear), {CFrame = cf})
     CurrentTween:Play()
     
     return CurrentTween
 end
+
 
 -- Find Enemy
 function Core:FindEnemy(name)
