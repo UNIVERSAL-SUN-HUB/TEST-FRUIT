@@ -3,8 +3,8 @@ repeat wait() until game.Players.LocalPlayer
 repeat wait() until game:IsLoaded()
 
 -- CONFIGURATION - Replace these with your actual script URLs/paths
-local UI_SCRIPT_URL = "https://example.com/path/to/UI.lua"      -- LINE 6: Replace with your UI.lua URL
-local CORE_SCRIPT_URL = "https://example.com/path/to/Core.lua"  -- LINE 7: Replace with your Core.lua URL
+local UI_SCRIPT_URL = "https://raw.githubusercontent.com/UNIVERSAL-SUN-HUB/TEST-FRUIT/refs/heads/main/UI.lua"      -- LINE 6: Replace with your UI.lua URL
+local CORE_SCRIPT_URL = "https://raw.githubusercontent.com/UNIVERSAL-SUN-HUB/TEST-FRUIT/refs/heads/main/Core.lua"  -- LINE 7: Replace with your Core.lua URL
 
 -- Load UI Module (LINE 10: loadstring for UI)
 local UILib = loadstring(game:HttpGet(UI_SCRIPT_URL, true))()
