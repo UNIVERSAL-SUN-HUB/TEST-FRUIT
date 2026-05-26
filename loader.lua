@@ -1,14 +1,29 @@
--- Loader.lua - Fixed with ALL Features
-repeat wait() until game.Players.LocalPlayer
-repeat wait() until game:IsLoaded()
+-- Loader.lua - Blox Fruits Hub (WORKING VERSION)
+repeat task.wait() until game.Players.LocalPlayer
+repeat task.wait() until game:IsLoaded()
 
--- CONFIGURATION - Replace these with your actual script URLs
+-- CONFIGURATION - Using your provided URLs
 local UI_SCRIPT_URL = "https://raw.githubusercontent.com/UNIVERSAL-SUN-HUB/TEST-FRUIT/refs/heads/main/UI.lua"
 local CORE_SCRIPT_URL = "https://raw.githubusercontent.com/UNIVERSAL-SUN-HUB/TEST-FRUIT/refs/heads/main/Core.lua"
 
 -- Load Modules
-local UILib = loadstring(game:HttpGet(UI_SCRIPT_URL, true))()
-local Core = loadstring(game:HttpGet(CORE_SCRIPT_URL, true))()
+local success, UILib = pcall(function()
+    return loadstring(game:HttpGet(UI_SCRIPT_URL, true))()
+end)
+
+if not success then
+    warn("Failed to load UI module")
+    return
+end
+
+local success2, Core = pcall(function()
+    return loadstring(game:HttpGet(CORE_SCRIPT_URL, true))()
+end)
+
+if not success2 then
+    warn("Failed to load Core module")
+    return
+end
 
 -- Create Window
 local Window = UILib:CreateWindow("BloxFruits Hub")
@@ -17,28 +32,31 @@ local Window = UILib:CreateWindow("BloxFruits Hub")
 local MainTab = Window:addtab("Main Farm")
 
 MainTab:addToggle("Auto Farm Level", false, function(value)
-    _G.AutoFarm = value
-    if value then Core:StartAutoFarm() end
+    Core:SetAutoFarm(value)
 end)
 
 MainTab:addToggle("Auto Quest", true, function(value)
-    _G.AutoQuest = value
+    Core:SetAutoQuest(value)
 end)
 
 MainTab:addToggle("Fast Attack", false, function(value)
-    _G.FastAttack = value
+    Core:SetFastAttack(value)
 end)
 
 MainTab:addToggle("Auto Haki", false, function(value)
-    _G.AutoHaki = value
+    Core:SetAutoHaki(value)
+end)
+
+MainTab:addToggle("Bring Mob", true, function(value)
+    Core:SetBringMob(value)
 end)
 
 MainTab:addDropdown("Farm Mode", {"Level Farm", "Mastery Farm", "Boss Farm", "Material Farm"}, function(selected)
-    _G.FarmMode = selected
+    Core:SetFarmMode(selected)
 end)
 
 MainTab:addDropdown("Weapon Select", {"Melee", "Sword", "Gun", "Demon Fruit"}, function(selected)
-    _G.SelectWeapon = selected
+    Core:SetWeapon(selected)
 end)
 
 -- ==================== ITEM QUEST TAB ====================
@@ -48,7 +66,7 @@ QuestTab:addButton("Get Saber", function()
     Core:GetSaber()
 end)
 
-QuestTab:addButton("Get Pole", function()
+QuestTab:addButton("Get Pole (V1)", function()
     Core:GetPole()
 end)
 
@@ -80,10 +98,6 @@ QuestTab:addButton("Get Swan Glasses", function()
     Core:GetSwanGlasses()
 end)
 
-QuestTab:addButton("Get Holy Crown", function()
-    Core:GetHolyCrown()
-end)
-
 QuestTab:addButton("Get Pale Scarf", function()
     Core:GetPaleScarf()
 end)
@@ -104,28 +118,23 @@ end)
 local SeaTab = Window:addtab("Sea Event")
 
 SeaTab:addToggle("Auto Sea Beast", false, function(value)
-    _G.AutoSeaBeast = value
-    if value then Core:AutoSeaBeast() end
+    Core:SetAutoSeaBeast(value)
 end)
 
 SeaTab:addToggle("Auto Shark", false, function(value)
-    _G.AutoShark = value
+    Core:SetAutoShark(value)
 end)
 
 SeaTab:addToggle("Auto Piranha", false, function(value)
-    _G.AutoPiranha = value
+    Core:SetAutoPiranha(value)
 end)
 
 SeaTab:addToggle("Auto Terrorshark", false, function(value)
-    _G.AutoTerrorshark = value
+    Core:SetAutoTerrorshark(value)
 end)
 
 SeaTab:addToggle("Auto Ghost Ship", false, function(value)
-    _G.AutoGhostShip = value
-end)
-
-SeaTab:addToggle("Auto Sea Event", false, function(value)
-    _G.AutoSeaEvent = value
+    Core:SetAutoGhostShip(value)
 end)
 
 SeaTab:addButton("Buy Boat", function()
@@ -136,32 +145,11 @@ end)
 local StatsTab = Window:addtab("Auto Stats")
 
 StatsTab:addToggle("Auto Stats", false, function(value)
-    _G.AutoStats = value
-    if value then Core:AutoStats() end
+    Core:SetAutoStats(value)
 end)
 
 StatsTab:addDropdown("Stat Type", {"Melee", "Defense", "Sword", "Gun", "Demon Fruit"}, function(selected)
-    _G.StatType = selected
-end)
-
-StatsTab:addButton("Max Melee", function()
-    Core:MaxStat("Melee")
-end)
-
-StatsTab:addButton("Max Defense", function()
-    Core:MaxStat("Defense")
-end)
-
-StatsTab:addButton("Max Sword", function()
-    Core:MaxStat("Sword")
-end)
-
-StatsTab:addButton("Max Gun", function()
-    Core:MaxStat("Gun")
-end)
-
-StatsTab:addButton("Max Blox Fruit", function()
-    Core:MaxStat("Demon Fruit")
+    Core:SetStatType(selected)
 end)
 
 -- ==================== TELEPORT TAB ====================
@@ -182,11 +170,11 @@ end)
 TeleportTab:addDropdown("Teleport to Island", {
     "Starter Island", "Jungle", "Pirate Village", "Desert", "Frozen Village", 
     "Marine Fortress", "Skylands", "Prison", "Colosseum", "Magma Village",
-    "Underwater City", "Fountain City", "Jail", "Kingdom of Rose", "Mansion",
+    "Underwater City", "Fountain City", "Kingdom of Rose", "Mansion",
     "Cafe", "Green Zone", "Graveyard", "Dark Arena", "Snow Mountain",
     "Hot and Cold", "Cursed Ship", "Ice Castle", "Forgotten Island", "Port Town",
     "Castle on the Sea", "Hydra Island", "Great Tree", "Floating Turtle", "Haunted Castle",
-    "Sea of Treats", "Chocolate Island", "Candy Island", "Tiki Outpost"
+    "Sea of Treats", "Tiki Outpost"
 }, function(selected)
     Core:TeleportToIsland(selected)
 end)
@@ -195,39 +183,15 @@ TeleportTab:addButton("Teleport to Mirage Island", function()
     Core:TeleportMirage()
 end)
 
-TeleportTab:addButton("Teleport to Full Moon", function()
-    Core:TeleportFullMoon()
-end)
-
 -- ==================== PVP TAB ====================
 local PvPTab = Window:addtab("PvP")
 
 PvPTab:addToggle("Auto PvP", false, function(value)
-    _G.AutoPvP = value
-end)
-
-PvPTab:addToggle("Auto Kill Player", false, function(value)
-    _G.AutoKillPlayer = value
-end)
-
-PvPTab:addToggle("Auto Farm Bounty", false, function(value)
-    _G.AutoFarmBounty = value
-end)
-
-PvPTab:addDropdown("Select Player", {"Refresh List"}, function(selected)
-    if selected == "Refresh List" then
-        Core:RefreshPlayerList()
-    else
-        _G.SelectedPlayer = selected
-    end
+    Core:SetAutoPvP(value)
 end)
 
 PvPTab:addToggle("Aimbot", false, function(value)
-    _G.Aimbot = value
-end)
-
-PvPTab:addToggle("Silent Aim", false, function(value)
-    _G.SilentAim = value
+    Core:SetAimbot(value)
 end)
 
 -- ==================== RACE V4 TAB ====================
@@ -242,78 +206,37 @@ RaceTab:addButton("Complete Race Trial", function()
 end)
 
 RaceTab:addToggle("Auto Race Trial", false, function(value)
-    _G.AutoRaceTrial = value
-end)
-
-RaceTab:addToggle("Auto Train Race", false, function(value)
-    _G.AutoTrainRace = value
-end)
-
-RaceTab:addButton("Get Cyborg Race", function()
-    Core:GetCyborg()
-end)
-
-RaceTab:addButton("Get Ghoul Race", function()
-    Core:GetGhoul()
-end)
-
-RaceTab:addButton("Get Human Race V4", function()
-    Core:GetRaceV4("Human")
-end)
-
-RaceTab:addButton("Get Shark Race V4", function()
-    Core:GetRaceV4("Shark")
-end)
-
-RaceTab:addButton("Get Angel Race V4", function()
-    Core:GetRaceV4("Angel")
-end)
-
-RaceTab:addButton("Get Rabbit Race V4", function()
-    Core:GetRaceV4("Rabbit")
+    Core:SetAutoRaceTrial(value)
 end)
 
 -- ==================== DUNGEON RAID TAB ====================
 local RaidTab = Window:addtab("Raid")
 
 RaidTab:addToggle("Auto Raid", false, function(value)
-    _G.AutoRaid = value
-    if value then Core:AutoRaid() end
+    Core:SetAutoRaid(value)
 end)
 
 RaidTab:addToggle("Auto Awaken", false, function(value)
-    _G.AutoAwaken = value
+    Core:SetAutoAwaken(value)
 end)
 
 RaidTab:addDropdown("Select Raid", {"Flame", "Ice", "Quake", "Light", "Dark", "String", "Rumble", "Magma", "Human: Buddha", "Sand", "Bird: Phoenix"}, function(selected)
-    _G.SelectedRaid = selected
+    Core:SetRaidType(selected)
 end)
 
 RaidTab:addButton("Buy Chip", function()
     Core:BuyRaidChip()
 end)
 
-RaidTab:addButton("Start Raid", function()
-    Core:StartRaid()
-end)
-
 -- ==================== FRUIT TAB ====================
 local FruitTab = Window:addtab("Fruits")
 
 FruitTab:addToggle("Auto Farm Fruit", false, function(value)
-    _G.AutoFarmFruit = value
+    Core:SetAutoFarmFruit(value)
 end)
 
 FruitTab:addToggle("Auto Store Fruit", false, function(value)
-    _G.AutoStoreFruit = value
-end)
-
-FruitTab:addToggle("Auto Eat Fruit", false, function(value)
-    _G.AutoEatFruit = value
-end)
-
-FruitTab:addToggle("Auto Drop Fruit", false, function(value)
-    _G.AutoDropFruit = value
+    Core:SetAutoStoreFruit(value)
 end)
 
 FruitTab:addButton("Teleport to Fruit", function()
@@ -324,57 +247,26 @@ FruitTab:addButton("Random Surprise", function()
     Core:RandomSurprise()
 end)
 
-FruitTab:addToggle("Auto Sniper Fruit", false, function(value)
-    _G.AutoSniperFruit = value
-end)
-
-FruitTab:addDropdown("Select Sniper Fruit", {
-    "Bomb-Bomb", "Spike-Spike", "Chop-Chop", "Spring-Spring", "Smoke-Smoke",
-    "Spin-Spin", "Flame-Flame", "Bird-Bird: Falcon", "Ice-Ice", "Sand-Sand",
-    "Dark-Dark", "Revive-Revive", "Diamond-Diamond", "Light-Light", "Love-Love",
-    "Rubber-Rubber", "Barrier-Barrier", "Magma-Magma", "Door-Door", "Quake-Quake",
-    "Human-Human: Buddha", "String-String", "Bird-Bird: Phoenix", "Rumble-Rumble",
-    "Paw-Paw", "Gravity-Gravity", "Dough-Dough", "Shadow-Shadow", "Venom-Venom",
-    "Control-Control", "Soul-Soul", "Dragon-Dragon", "Leopard-Leopard"
-}, function(selected)
-    _G.SniperFruit = selected
-end)
-
 -- ==================== ESP TAB ====================
 local ESPTab = Window:addtab("ESP")
 
 ESPTab:addToggle("ESP Player", false, function(value)
-    _G.ESPPlayer = value
     Core:ToggleESP("Player", value)
 end)
 
 ESPTab:addToggle("ESP Fruit", false, function(value)
-    _G.ESPFruit = value
     Core:ToggleESP("Fruit", value)
 end)
 
 ESPTab:addToggle("ESP Chest", false, function(value)
-    _G.ESPChest = value
     Core:ToggleESP("Chest", value)
 end)
 
 ESPTab:addToggle("ESP Flower", false, function(value)
-    _G.ESPFlower = value
     Core:ToggleESP("Flower", value)
 end)
 
-ESPTab:addToggle("ESP Island", false, function(value)
-    _G.ESPIsland = value
-    Core:ToggleESP("Island", value)
-end)
-
-ESPTab:addToggle("ESP Sea Beast", false, function(value)
-    _G.ESPSeaBeast = value
-    Core:ToggleESP("SeaBeast", value)
-end)
-
 ESPTab:addToggle("ESP Mob", false, function(value)
-    _G.ESPMob = value
     Core:ToggleESP("Mob", value)
 end)
 
@@ -408,43 +300,23 @@ ShopTab:addDropdown("Buy Fighting Style", {
     Core:BuyFightingStyle(selected)
 end)
 
-ShopTab:addButton("Buy Legendary Sword", function()
-    Core:BuyLegendarySword()
-end)
-
 -- ==================== MISC TAB ====================
 local MiscTab = Window:addtab("Misc")
 
 MiscTab:addToggle("Safe Farm Mode", true, function(value)
-    _G.SafeFarm = value
-    if not value then
-        game.Players.LocalPlayer:Kick("Please don't turn off safe farm if you don't want to get banned")
-    end
+    Core:SetSafeFarm(value)
 end)
 
 MiscTab:addToggle("Anti AFK", true, function(value)
-    _G.AntiAFK = value
+    Core:SetAntiAFK(value)
 end)
 
 MiscTab:addToggle("No Clip", false, function(value)
-    _G.NoClip = value
+    Core:SetNoClip(value)
 end)
 
 MiscTab:addToggle("Infinite Jump", false, function(value)
-    _G.InfiniteJump = value
-    if value then
-        game:GetService("UserInputService").JumpRequest:connect(function()
-            game.Players.LocalPlayer.Character:FindFirstChildOfClass'Humanoid':ChangeState("Jumping")
-        end)
-    end
-end)
-
-MiscTab:addToggle("Walk on Water", false, function(value)
-    _G.WalkOnWater = value
-end)
-
-MiscTab:addToggle("Auto Click", false, function(value)
-    _G.AutoClick = value
+    Core:SetInfiniteJump(value)
 end)
 
 MiscTab:addButton("FPS Boost", function()
@@ -452,7 +324,7 @@ MiscTab:addButton("FPS Boost", function()
 end)
 
 MiscTab:addButton("Rejoin Server", function()
-    game:GetService("TeleportService"):Teleport(game.PlaceId, game.Players.LocalPlayer)
+    Core:RejoinServer()
 end)
 
 MiscTab:addButton("Server Hop", function()
@@ -460,12 +332,8 @@ MiscTab:addButton("Server Hop", function()
 end)
 
 MiscTab:addButton("Destroy UI", function()
-    for _, v in pairs(game.CoreGui:GetChildren()) do
-        if v.Name == "BloxFruitsUI" then
-            v:Destroy()
-        end
-    end
+    Core:DestroyUI()
 end)
 
--- Initialize Core
+-- Initialize
 Core:Init()
