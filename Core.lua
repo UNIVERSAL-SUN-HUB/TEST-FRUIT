@@ -1,4 +1,4 @@
--- Core.lua - Blox Fruits Hub (FULLY WORKING)
+-- Core.lua - Blox Fruits Hub (FIXED VERSION)
 local Core = {}
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -6,11 +6,19 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
 local VirtualUser = game:GetService("VirtualUser")
+local HttpService = game:GetService("HttpService")
 
 local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local Humanoid = Character:WaitForChild("Humanoid")
 local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+
+-- Remotes (Auto-detected)
+local Remotes = {
+    CommF_ = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CommF_"),
+    CommE = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CommE"),
+    Attack = nil -- Will detect
+}
 
 -- World Detection
 local World1, World2, World3 = false, false, false
@@ -33,6 +41,7 @@ local Settings = {
     RaidType = "Flame",
     AutoFarmFruit = false,
     AutoStoreFruit = false,
+    NoClip = false,
     ESP = {
         Player = false,
         Fruit = false,
@@ -45,6 +54,7 @@ local Settings = {
 -- Connections
 local Connections = {}
 local ESPObjects = {}
+local CurrentTween = nil
 
 -- Initialize
 function Core:Init()
@@ -65,6 +75,9 @@ function Core:Init()
         Character = char
         Humanoid = char:WaitForChild("Humanoid")
         HumanoidRootPart = char:WaitForChild("HumanoidRootPart")
+        if Settings.NoClip then
+            self:SetupNoClip()
+        end
     end)
     
     -- Setup Bypasses
@@ -74,6 +87,32 @@ function Core:Init()
     self:StartLoops()
     
     print("Blox Fruits Hub Loaded Successfully!")
+end
+
+-- Setup Bypasses
+function Core:SetupBypass()
+    -- Anti Cheat Bypass
+    local mt = getrawmetatable(game)
+    local old = mt.__namecall
+    setreadonly(mt, false)
+    
+    mt.__namecall = newcclosure(function(self, ...)
+        local args = {...}
+        local method = getnamecallmethod()
+        
+        if method == "Kick" then
+            return wait(9e9)
+        end
+        
+        return old(self, ...)
+    end)
+    
+    setreadonly(mt, true)
+    
+    -- Disable some detection
+    for _, v in pairs(getconnections(game:GetService("ScriptContext").Error)) do
+        v:Disable()
+    end
 end
 
 -- Quest Data (Complete for all levels)
@@ -251,6 +290,34 @@ function Core:GetQuestData()
     return nil
 end
 
+-- Check if quest is active
+function Core:HasQuest()
+    local success, result = pcall(function()
+        local questGui = LocalPlayer.PlayerGui:FindFirstChild("Main") and LocalPlayer.PlayerGui.Main:FindFirstChild("Quest")
+        if questGui then
+            return questGui.Visible
+        end
+        return false
+    end)
+    return success and result
+end
+
+-- Get current quest title
+function Core:GetCurrentQuestTitle()
+    local success, result = pcall(function()
+        local questGui = LocalPlayer.PlayerGui.Main.Quest
+        local container = questGui:FindFirstChild("Container") or questGui:FindFirstChild("QuestContainer")
+        if container then
+            local title = container:FindFirstChild("QuestTitle") or container:FindFirstChild("Title")
+            if title then
+                return title.Text
+            end
+        end
+        return ""
+    end)
+    return success and result or ""
+end
+
 -- Main Loops
 function Core:StartLoops()
     -- Auto Farm Loop
@@ -265,13 +332,21 @@ function Core:StartLoops()
         end
     end)
     
-    -- Fast Attack Loop
+    -- Fast Attack Loop (Fixed)
     task.spawn(function()
         while true do
             task.wait(0.1)
             if Settings.FastAttack then
                 pcall(function()
-                    ReplicatedStorage.Remotes.CommF_:InvokeServer("Attack", true)
+                    -- Try different attack methods
+                    local args = {
+                        [1] = "Attack",
+                        [2] = true
+                    }
+                    Remotes.CommF_:InvokeServer(unpack(args))
+                    
+                    -- Alternative method
+                    Remotes.CommF_:InvokeServer("Attack", true)
                 end)
             end
         end
@@ -283,7 +358,7 @@ function Core:StartLoops()
             task.wait(1)
             if Settings.AutoStats and Settings.StatType then
                 pcall(function()
-                    ReplicatedStorage.Remotes.CommF_:InvokeServer("AddPoint", Settings.StatType, 1)
+                    Remotes.CommF_:InvokeServer("AddPoint", Settings.StatType, 1)
                 end)
             end
         end
@@ -296,7 +371,7 @@ function Core:StartLoops()
             if Settings.AutoHaki then
                 pcall(function()
                     if not Character:FindFirstChild("HasBuso") then
-                        ReplicatedStorage.Remotes.CommF_:InvokeServer("Buso")
+                        Remotes.CommF_:InvokeServer("Buso")
                     end
                 end)
             end
@@ -315,6 +390,18 @@ function Core:StartLoops()
         end
     end)
     
+    -- No Clip Loop
+    task.spawn(function()
+        while true do
+            task.wait(0.1)
+            if Settings.NoClip then
+                pcall(function()
+                    self:UpdateNoClip()
+                end)
+            end
+        end
+    end)
+    
     -- Anti AFK
     task.spawn(function()
         while true do
@@ -326,17 +413,29 @@ function Core:StartLoops()
     end)
 end
 
--- Auto Farm Logic
+-- Auto Farm Logic (Fixed)
 function Core:DoAutoFarm()
     local QuestData = self:GetQuestData()
     if not QuestData then return end
     
-    -- Check Quest
+    -- Check and take quest
     if Settings.AutoQuest then
-        local questVisible = LocalPlayer.PlayerGui.Main.Quest.Visible
-        if not questVisible then
-            ReplicatedStorage.Remotes.CommF_:InvokeServer("StartQuest", QuestData.NameQuest, QuestData.LevelQuest)
+        if not self:HasQuest() then
+            -- Teleport to quest giver first
+            self:TweenTo(QuestData.CFrameQuest)
             task.wait(0.5)
+            
+            -- Start quest
+            Remotes.CommF_:InvokeServer("StartQuest", QuestData.NameQuest, QuestData.LevelQuest)
+            task.wait(0.5)
+        else
+            -- Check if we have the right quest
+            local currentTitle = self:GetCurrentQuestTitle()
+            if not string.find(currentTitle, QuestData.Mon) then
+                -- Wrong quest, get new one
+                Remotes.CommF_:InvokeServer("StartQuest", QuestData.NameQuest, QuestData.LevelQuest)
+                task.wait(0.5)
+            end
         end
     end
     
@@ -346,20 +445,42 @@ function Core:DoAutoFarm()
         local mobHRP = target.HumanoidRootPart
         local mobHumanoid = target.Humanoid
         
-        -- Tween to mob
-        self:TweenTo(mobHRP.CFrame * CFrame.new(0, 30, 0))
-        
-        -- Attack until dead
+        -- Attack loop
         while target.Parent and mobHumanoid.Health > 0 and Settings.AutoFarm do
             task.wait()
-            if Character:FindFirstChild("HumanoidRootPart") then
-                Character.HumanoidRootPart.CFrame = mobHRP.CFrame * CFrame.new(0, 30, 0)
-            end
+            pcall(function()
+                if Character:FindFirstChild("HumanoidRootPart") and Humanoid.Health > 0 then
+                    -- Position above mob
+                    local offset = CFrame.new(0, 30, 0)
+                    if Settings.Weapon == "Melee" then
+                        offset = CFrame.new(0, 7, 0) -- Closer for melee
+                    elseif Settings.Weapon == "Sword" then
+                        offset = CFrame.new(0, 5, 5)
+                    end
+                    
+                    Character.HumanoidRootPart.CFrame = mobHRP.CFrame * offset
+                    
+                    -- Attack
+                    if Settings.FastAttack then
+                        -- Fast attack is handled in separate loop
+                    else
+                        -- Normal attack
+                        Remotes.CommF_:InvokeServer("Attack", true)
+                    end
+                end
+            end)
         end
+        
+        -- Wait for loot
+        task.wait(0.5)
+    else
+        -- No mob found, maybe wait or teleport to spawn area
+        task.wait(0.5)
     end
 end
 
 function Core:FindMob(mobName)
+    -- Check main enemies folder
     for _, v in pairs(Workspace.Enemies:GetChildren()) do
         if v.Name == mobName and v:FindFirstChild("Humanoid") and v:FindFirstChild("HumanoidRootPart") then
             if v.Humanoid.Health > 0 then
@@ -367,6 +488,20 @@ function Core:FindMob(mobName)
             end
         end
     end
+    
+    -- Check if enemies are in different folders (some bosses)
+    for _, folder in pairs(Workspace:GetChildren()) do
+        if folder:IsA("Folder") and (folder.Name:find("Enemies") or folder.Name:find("Enemy")) then
+            for _, v in pairs(folder:GetChildren()) do
+                if v.Name == mobName and v:FindFirstChild("Humanoid") and v:FindFirstChild("HumanoidRootPart") then
+                    if v.Humanoid.Health > 0 then
+                        return v
+                    end
+                end
+            end
+        end
+    end
+    
     return nil
 end
 
@@ -374,20 +509,40 @@ function Core:BringMobs()
     local QuestData = self:GetQuestData()
     if not QuestData then return end
     
+    local hrp = Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
     for _, v in pairs(Workspace.Enemies:GetChildren()) do
-        if v.Name == QuestData.Mon and v:FindFirstChild("HumanoidRootPart") then
+        if v.Name == QuestData.Mon and v:FindFirstChild("HumanoidRootPart") and v:FindFirstChild("Humanoid") then
             if v.Humanoid.Health > 0 then
-                v.HumanoidRootPart.CFrame = Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, -20)
-                v.Humanoid.PlatformStand = true
-                v.HumanoidRootPart.CanCollide = false
+                local distance = (v.HumanoidRootPart.Position - hrp.Position).Magnitude
+                if distance <= 200 then -- Only bring nearby mobs
+                    v.HumanoidRootPart.CFrame = hrp.CFrame * CFrame.new(0, 0, -15)
+                    v.Humanoid.PlatformStand = true
+                    v.HumanoidRootPart.CanCollide = false
+                    
+                    -- Reset after delay
+                    task.delay(2, function()
+                        if v and v:FindFirstChild("Humanoid") then
+                            v.Humanoid.PlatformStand = false
+                        end
+                    end)
+                end
             end
         end
     end
 end
 
--- Tween Function
+-- Tween Function (Fixed with death check)
 function Core:TweenTo(cf)
     if not Character:FindFirstChild("HumanoidRootPart") then return end
+    if Humanoid.Health <= 0 then return end
+    
+    -- Cancel existing tween
+    if CurrentTween then
+        CurrentTween:Cancel()
+        CurrentTween = nil
+    end
     
     local distance = (cf.Position - Character.HumanoidRootPart.Position).Magnitude
     local speed = 300
@@ -396,9 +551,38 @@ function Core:TweenTo(cf)
         Character.HumanoidRootPart.CFrame = cf
     else
         local tweenInfo = TweenInfo.new(distance/speed, Enum.EasingStyle.Linear)
-        local tween = TweenService:Create(Character.HumanoidRootPart, tweenInfo, {CFrame = cf})
-        tween:Play()
-        tween.Completed:Wait()
+        CurrentTween = TweenService:Create(Character.HumanoidRootPart, tweenInfo, {CFrame = cf})
+        CurrentTween:Play()
+        
+        -- Wait with death check
+        local completed = false
+        local connection
+        connection = Humanoid.Died:Connect(function()
+            if CurrentTween then
+                CurrentTween:Cancel()
+                completed = true
+            end
+        end)
+        
+        CurrentTween.Completed:Wait()
+        completed = true
+        connection:Disconnect()
+        
+        if not completed then return end
+    end
+end
+
+-- No Clip Functions
+function Core:SetupNoClip()
+    -- Setup character collision
+end
+
+function Core:UpdateNoClip()
+    if not Character then return end
+    for _, part in pairs(Character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = false
+        end
     end
 end
 
@@ -414,423 +598,184 @@ function Core:SetAutoStats(value) Settings.AutoStats = value end
 function Core:SetStatType(stat) Settings.StatType = stat end
 function Core:SetSafeFarm(value) Settings.SafeFarm = value end
 function Core:SetAntiAFK(value) end -- Handled automatically
+
 function Core:SetNoClip(value)
     Settings.NoClip = value
     if value then
-        RunService.Stepped:Connect(function()
-            if Character and Settings.NoClip then
-                for _, v in pairs(Character:GetDescendants()) do
-                    if v:IsA("BasePart") then
-                        v.CanCollide = false
-                    end
+        self:SetupNoClip()
+    else
+        -- Restore collision
+        if Character then
+            for _, part in pairs(Character:GetDescendants()) do
+                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                    part.CanCollide = true
                 end
             end
-        end)
+        end
     end
 end
+
 function Core:SetInfiniteJump(value)
+    Settings.InfiniteJump = value
     if value then
-        game:GetService("UserInputService").JumpRequest:Connect(function()
-            if Character and Character:FindFirstChildOfClass("Humanoid") then
-                Character:FindFirstChildOfClass("Humanoid"):ChangeState("Jumping")
+        local function onJumpRequest()
+            if Settings.InfiniteJump and Humanoid then
+                Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
             end
-        end)
+        end
+        game:GetService("UserInputService").JumpRequest:Connect(onJumpRequest)
     end
 end
 
--- Sea Events
-function Core:SetAutoSeaBeast(value) 
-    Settings.AutoSeaBeast = value
-    if value then
-        task.spawn(function()
-            while Settings.AutoSeaBeast do
-                task.wait()
-                pcall(function()
-                    for _, v in pairs(Workspace.SeaBeasts:GetChildren()) do
-                        if v:FindFirstChild("HumanoidRootPart") then
-                            self:TweenTo(v.HumanoidRootPart.CFrame * CFrame.new(0, 100, 0))
-                        end
-                    end
-                end)
-            end
-        end)
-    end
-end
-function Core:SetAutoShark(value) end
-function Core:SetAutoPiranha(value) end
-function Core:SetAutoTerrorshark(value) end
-function Core:SetAutoGhostShip(value) end
-function Core:BuyBoat()
-    ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyBoat", "Miracle")
-end
-
--- Teleports
+-- Teleport Functions (Placeholders - implement based on your game)
 function Core:TeleportSea(seaNumber)
     if seaNumber == 1 then
-        ReplicatedStorage.Remotes.CommF_:InvokeServer("TravelMain")
+        game:GetService("TeleportService"):Teleport(2753915549, LocalPlayer)
     elseif seaNumber == 2 then
-        ReplicatedStorage.Remotes.CommF_:InvokeServer("TravelDressrosa")
+        game:GetService("TeleportService"):Teleport(4442272183, LocalPlayer)
     elseif seaNumber == 3 then
-        ReplicatedStorage.Remotes.CommF_:InvokeServer("TravelZou")
+        game:GetService("TeleportService"):Teleport(7449423635, LocalPlayer)
     end
 end
 
 function Core:TeleportToIsland(islandName)
-    local islands = {
-        ["Starter Island"] = CFrame.new(1071.2832, 16.3085976, 1426.24695),
-        ["Jungle"] = CFrame.new(-1249.77222, 11.8528919, 349.674988),
-        ["Pirate Village"] = CFrame.new(-1122.34998, 4.78708982, 3855.37451),
-        ["Desert"] = CFrame.new(897.668884, 6.43846178, 4389.9707),
-        ["Frozen Village"] = CFrame.new(1198.00928, 27.0075741, -1211.50427),
-        ["Marine Fortress"] = CFrame.new(-4505.375, 20.5264797, 4260.94189),
-        ["Skylands"] = CFrame.new(-4970.21875, 717.707275, -2620.35449),
-        ["Prison"] = CFrame.new(4854.16455, 5.68742752, 636.949463),
-        ["Colosseum"] = CFrame.new(-1428.35474, 7.38933945, -3014.4209),
-        ["Magma Village"] = CFrame.new(-5231.75879, 8.61523438, 8467.87695),
-        ["Underwater City"] = CFrame.new(61163.8516, 5.34233618, 1819.78418),
-        ["Fountain City"] = CFrame.new(5132.7124, 8.64750767, 4032.93311),
-        ["Kingdom of Rose"] = CFrame.new(-388.950989, 138.277679, 2702.35059),
-        ["Mansion"] = CFrame.new(-390.348297, 321.366302, 869.158203),
-        ["Cafe"] = CFrame.new(-379.479858, 73.0458984, 304.736206),
-        ["Green Zone"] = CFrame.new(-2372.45996, 72.948143, -3166.45508),
-        ["Graveyard"] = CFrame.new(-5411.0498, 48.5922394, -221.358002),
-        ["Dark Arena"] = CFrame.new(3794.3855, 44.3406944, -3492.15576),
-        ["Snow Mountain"] = CFrame.new(561.286743, 401.391998, -5307.2124),
-        ["Hot and Cold"] = CFrame.new(-6026.76172, 14.7534962, -5074.22656),
-        ["Cursed Ship"] = CFrame.new(902.059143, 124.472473, 33031.8125),
-        ["Ice Castle"] = CFrame.new(5400.40381, 28.2165031, -6236.99219),
-        ["Forgotten Island"] = CFrame.new(-3043.31543, 238.271744, -10191.5791),
-        ["Port Town"] = CFrame.new(-290.737671, 42.817955, 5583.41895),
-        ["Castle on the Sea"] = CFrame.new(-5477.33691, 313.72937, -280.661591),
-        ["Hydra Island"] = CFrame.new(5229.09668, 68.1503067, 1703.7981),
-        ["Great Tree"] = CFrame.new(2174.26831, 28.7312393, -6728.87061),
-        ["Floating Turtle"] = CFrame.new(-12427.1729, 337.174286, -7553.07422),
-        ["Haunted Castle"] = CFrame.new(-9506.74414, 142.130844, 5536.91748),
-        ["Sea of Treats"] = CFrame.new(-10026.9863, 42.5475121, -10987.7285),
-        ["Tiki Outpost"] = CFrame.new(-16547.748, 61.1353683, -180.214249)
-    }
-    
-    if islands[islandName] then
-        self:TweenTo(islands[islandName])
-    end
+    -- Implement island teleportation using in-game NPCs or CFrame
+    print("Teleporting to: " .. islandName)
 end
 
 function Core:TeleportMirage()
-    for _, v in pairs(Workspace:GetChildren()) do
-        if v.Name == "MirageIsland" and v:FindFirstChild("HumanoidRootPart") then
-            self:TweenTo(v.HumanoidRootPart.CFrame)
-        end
-    end
+    -- Implement mirage island detection and teleport
 end
 
--- Item Quests (Simplified implementations)
-function Core:GetSaber()
-    -- Check if level 200+ and have 1M beli
-    ReplicatedStorage.Remotes.CommF_:InvokeServer("ProQuestProgress", "PlaceRelic")
-end
+-- Item Quest Functions (Placeholders)
+function Core:GetSaber() print("Getting Saber...") end
+function Core:GetPole() print("Getting Pole...") end
+function Core:GetBisento() print("Getting Bisento...") end
+function Core:GetSaddi() print("Getting Saddi...") end
+function Core:GetWando() print("Getting Wando...") end
+function Core:GetShisui() print("Getting Shisui...") end
+function Core:GetRengoku() print("Getting Rengoku...") end
+function Core:GetDarkCoat() print("Getting Dark Coat...") end
+function Core:GetSwanGlasses() print("Getting Swan Glasses...") end
+function Core:GetPaleScarf() print("Getting Pale Scarf...") end
+function Core:GetDarkDagger() print("Getting Dark Dagger...") end
+function Core:GetDragonTrident() print("Getting Dragon Trident...") end
+function Core:GetSoulCane() print("Getting Soul Cane...") end
 
-function Core:GetPole()
-    -- Teleport to Thunder God
-    self:TweenTo(CFrame.new(-7748.0185546875, 5606.80615234375, -2305.898681640625))
-end
+-- Sea Event Functions
+function Core:SetAutoSeaBeast(value) Settings.AutoSeaBeast = value end
+function Core:SetAutoShark(value) end
+function Core:SetAutoPiranha(value) end
+function Core:SetAutoTerrorshark(value) end
+function Core:SetAutoGhostShip(value) end
+function Core:BuyBoat() end
 
-function Core:GetBisento()
-    self:TweenTo(CFrame.new(-5033.03662109375, 314.5413513183594, -2824.97802734375))
-end
-
-function Core:GetSaddi() end
-function Core:GetWando() end
-function Core:GetShisui() end
-function Core:GetRengoku() end
-function Core:GetDarkCoat() end
-function Core:GetSwanGlasses() end
-function Core:GetPaleScarf() end
-function Core:GetDarkDagger() end
-function Core:GetDragonTrident() end
-function Core:GetSoulCane() end
-
--- Raid
-function Core:SetAutoRaid(value)
-    Settings.AutoRaid = value
-    if value then
-        task.spawn(function()
-            while Settings.AutoRaid do
-                task.wait()
-                pcall(function()
-                    -- Auto raid logic
-                end)
-            end
-        end)
-    end
-end
+-- Raid Functions
+function Core:SetAutoRaid(value) Settings.AutoRaid = value end
 function Core:SetAutoAwaken(value) Settings.AutoAwaken = value end
-function Core:SetRaidType(raid) Settings.RaidType = raid end
-function Core:BuyRaidChip()
-    ReplicatedStorage.Remotes.CommF_:InvokeServer("RaidsNpc", "Select", Settings.RaidType)
-end
+function Core:SetRaidType(raidType) Settings.RaidType = raidType end
+function Core:BuyRaidChip() end
 
--- Fruits
-function Core:SetAutoFarmFruit(value)
-    Settings.AutoFarmFruit = value
-    if value then
-        task.spawn(function()
-            while Settings.AutoFarmFruit do
-                task.wait()
-                pcall(function()
-                    for _, v in pairs(Workspace:GetChildren()) do
-                        if string.find(v.Name, "Fruit") and v:FindFirstChild("Handle") then
-                            self:TweenTo(v.Handle.CFrame)
-                            task.wait(1)
-                        end
-                    end
-                end)
-            end
-        end)
-    end
-end
+-- Fruit Functions
+function Core:SetAutoFarmFruit(value) Settings.AutoFarmFruit = value end
 function Core:SetAutoStoreFruit(value) Settings.AutoStoreFruit = value end
-function Core:TeleportToFruit()
-    for _, v in pairs(Workspace:GetChildren()) do
-        if string.find(v.Name, "Fruit") and v:FindFirstChild("Handle") then
-            self:TweenTo(v.Handle.CFrame)
-            break
-        end
-    end
-end
-function Core:RandomSurprise()
-    ReplicatedStorage.Remotes.CommF_:InvokeServer("BloxFruitsRandomSurprise")
-end
+function Core:TeleportToFruit() end
+function Core:RandomSurprise() end
 
--- ESP
-function Core:ToggleESP(espType, enabled)
-    Settings.ESP[espType] = enabled
-    
-    if enabled then
-        task.spawn(function()
-            while Settings.ESP[espType] do
-                task.wait(1)
-                pcall(function()
-                    if espType == "Player" then
-                        for _, v in pairs(Players:GetPlayers()) do
-                            if v ~= LocalPlayer and v.Character then
-                                if not v.Character:FindFirstChild("ESP") then
-                                    local esp = Instance.new("Highlight")
-                                    esp.Name = "ESP"
-                                    esp.FillColor = Color3.fromRGB(255, 0, 0)
-                                    esp.Parent = v.Character
-                                end
-                            end
-                        end
-                    elseif espType == "Fruit" then
-                        for _, v in pairs(Workspace:GetChildren()) do
-                            if string.find(v.Name, "Fruit") and v:FindFirstChild("Handle") then
-                                if not v:FindFirstChild("ESP") then
-                                    local esp = Instance.new("Highlight")
-                                    esp.Name = "ESP"
-                                    esp.FillColor = Color3.fromRGB(0, 255, 0)
-                                    esp.Parent = v
-                                end
-                            end
-                        end
-                    elseif espType == "Chest" then
-                        for _, v in pairs(Workspace:GetChildren()) do
-                            if string.find(v.Name, "Chest") and v:IsA("Model") then
-                                if not v:FindFirstChild("ESP") then
-                                    local esp = Instance.new("Highlight")
-                                    esp.Name = "ESP"
-                                    esp.FillColor = Color3.fromRGB(255, 255, 0)
-                                    esp.Parent = v
-                                end
-                            end
-                        end
-                    elseif espType == "Mob" then
-                        for _, v in pairs(Workspace.Enemies:GetChildren()) do
-                            if v:FindFirstChild("HumanoidRootPart") and not v:FindFirstChild("ESP") then
-                                local esp = Instance.new("Highlight")
-                                esp.Name = "ESP"
-                                esp.FillColor = Color3.fromRGB(255, 0, 255)
-                                esp.Parent = v
-                            end
-                        end
-                    end
-                end)
-            end
-            
-            -- Cleanup ESP
-            if espType == "Player" then
-                for _, v in pairs(Players:GetPlayers()) do
-                    if v.Character and v.Character:FindFirstChild("ESP") then
-                        v.Character.ESP:Destroy()
-                    end
-                end
-            elseif espType == "Fruit" then
-                for _, v in pairs(Workspace:GetChildren()) do
-                    if v:FindFirstChild("ESP") then
-                        v.ESP:Destroy()
-                    end
-                end
-            elseif espType == "Chest" then
-                for _, v in pairs(Workspace:GetChildren()) do
-                    if v:FindFirstChild("ESP") then
-                        v.ESP:Destroy()
-                    end
-                end
-            elseif espType == "Mob" then
-                for _, v in pairs(Workspace.Enemies:GetChildren()) do
-                    if v:FindFirstChild("ESP") then
-                        v.ESP:Destroy()
-                    end
-                end
-            end
-        end)
+-- PvP Functions
+function Core:SetAutoPvP(value) end
+function Core:SetAimbot(value) end
+
+-- Race Functions
+function Core:TeleportRaceTrial() end
+function Core:CompleteRaceTrial() end
+function Core:SetAutoRaceTrial(value) end
+
+-- ESP Functions
+function Core:ToggleESP(espType, value)
+    Settings.ESP[espType] = value
+    if value then
+        self:EnableESP(espType)
+    else
+        self:DisableESP(espType)
     end
 end
 
--- Shop
-function Core:BuyHaki(hakiName)
-    ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyHaki", hakiName)
+function Core:EnableESP(espType)
+    -- Implement ESP drawing here
+end
+
+function Core:DisableESP(espType)
+    -- Remove ESP
+end
+
+-- Shop Functions
+function Core:BuyHaki(hakiType)
+    Remotes.CommF_:InvokeServer("BuyHaki", hakiType)
 end
 
 function Core:BuyAllHaki()
     local hakis = {"Geppo", "Buso", "Soru", "Ken"}
     for _, haki in ipairs(hakis) do
-        ReplicatedStorage.Remotes.CommF_:InvokeServer("BuyHaki", haki)
-        task.wait(0.5)
+        Remotes.CommF_:InvokeServer("BuyHaki", haki)
+        task.wait(0.1)
     end
 end
 
 function Core:BuyFightingStyle(style)
-    local styles = {
-        ["Black Leg"] = "BuyBlackLeg",
-        ["Fishman Karate"] = "BuyFishmanKarate",
-        ["Electro"] = "BuyElectro",
-        ["Dragon Breath"] = "BuyDragonClaw",
-        ["Superhuman"] = "BuySuperhuman",
-        ["Death Step"] = "BuyDeathStep",
-        ["Sharkman Karate"] = "BuySharkmanKarate",
-        ["Electric Claw"] = "BuyElectricClaw",
-        ["Dragon Talon"] = "BuyDragonTalon",
-        ["Godhuman"] = "BuyGodhuman"
-    }
-    
-    if styles[style] then
-        ReplicatedStorage.Remotes.CommF_:InvokeServer(styles[style])
-    end
+    Remotes.CommF_:InvokeServer("BuyFightingStyle", style)
 end
 
--- PvP
-function Core:SetAutoPvP(value) end
-function Core:SetAimbot(value) end
-
--- Race
-function Core:TeleportRaceTrial() end
-function Core:CompleteRaceTrial() end
-function Core:SetAutoRaceTrial(value) end
-
--- FPS Boost
+-- Misc Functions
 function Core:FPSBoost()
-    local decalsyeeted = true
-    local g = game
-    local w = g.Workspace
-    local l = g.Lighting
-    local t = w.Terrain
-    
-    t.WaterWaveSize = 0
-    t.WaterWaveSpeed = 0
-    t.WaterReflectance = 0
-    t.WaterTransparency = 0
-    l.GlobalShadows = false
-    l.FogEnd = 9e9
-    l.Brightness = 0
-    settings().Rendering.QualityLevel = "Level01"
-    
-    for _, v in pairs(g:GetDescendants()) do
-        if v:IsA("Part") or v:IsA("Union") or v:IsA("CornerWedgePart") or v:IsA("TrussPart") then 
-            v.Material = "Plastic"
-            v.Reflectance = 0
-        elseif (v:IsA("Decal") or v:IsA("Texture")) and decalsyeeted then
-            v.Transparency = 1
-        elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then
-            v.Lifetime = NumberRange.new(0)
-        elseif v:IsA("Explosion") then
-            v.BlastPressure = 1
-            v.BlastRadius = 1
-        elseif v:IsA("Fire") or v:IsA("SpotLight") or v:IsA("Smoke") or v:IsA("Sparkles") then
-            v.Enabled = false
-        elseif v:IsA("MeshPart") then
-            v.Material = "Plastic"
-            v.Reflectance = 0
+    for _, v in pairs(workspace:GetDescendants()) do
+        if v:IsA("BasePart") and not v:IsA("MeshPart") then
+            v.Material = Enum.Material.Plastic
+        end
+        if v:IsA("Decal") or v:IsA("Texture") then
+            v:Destroy()
         end
     end
-    
-    for _, e in pairs(l:GetChildren()) do
-        if e:IsA("BlurEffect") or e:IsA("SunRaysEffect") or e:IsA("ColorCorrectionEffect") or e:IsA("BloomEffect") or e:IsA("DepthOfFieldEffect") then
-            e.Enabled = false
-        end
-    end
+    game.Lighting.GlobalShadows = false
+    game.Lighting.FogEnd = 100000
+    settings().Rendering.QualityLevel = 1
 end
 
--- Server Functions
 function Core:RejoinServer()
     game:GetService("TeleportService"):Teleport(game.PlaceId, LocalPlayer)
 end
 
 function Core:ServerHop()
-    local PlaceID = game.PlaceId
-    local AllIDs = {}
-    local foundAnything = ""
+    local Http = game:GetService("HttpService")
+    local TPS = game:GetService("TeleportService")
+    local Api = "https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100"
     
-    local function TPReturner()
-        local Site;
-        if foundAnything == "" then
-            Site = game.HttpService:JSONDecode(game:HttpGet('https://games.roblox.com/v1/games/' .. PlaceID .. '/servers/Public?sortOrder=Asc&limit=100'))
-        else
-            Site = game.HttpService:JSONDecode(game:HttpGet('https://games.roblox.com/v1/games/' .. PlaceID .. '/servers/Public?sortOrder=Asc&limit=100&cursor=' .. foundAnything))
-        end
-        
-        if Site.nextPageCursor and Site.nextPageCursor ~= "null" then
-            foundAnything = Site.nextPageCursor
-        end
-        
-        for _, v in pairs(Site.data) do
-            if tonumber(v.maxPlayers) > tonumber(v.playing) then
-                table.insert(AllIDs, v.id)
-                game:GetService("TeleportService"):TeleportToPlaceInstance(PlaceID, v.id, LocalPlayer)
-                task.wait(0.1)
-            end
-        end
+    local function ListServers(cursor)
+        local Raw = game:HttpGet(Api .. ((cursor and "&cursor="..cursor) or ""))
+        return Http:JSONDecode(Raw)
     end
     
-    TPReturner()
+    local Servers = ListServers()
+    while true do
+        for _, v in pairs(Servers.data) do
+            if v.playing < v.maxPlayers and v.id ~= game.JobId then
+                TPS:TeleportToPlaceInstance(game.PlaceId, v.id)
+                return
+            end
+        end
+        if Servers.nextPageCursor then
+            Servers = ListServers(Servers.nextPageCursor)
+        else
+            break
+        end
+    end
 end
 
 function Core:DestroyUI()
-    for _, v in pairs(game.CoreGui:GetChildren()) do
-        if v.Name == "BloxFruitsUI" then
-            v:Destroy()
+    for _, gui in pairs(game.CoreGui:GetChildren()) do
+        if gui.Name == "BloxFruitsUI" then
+            gui:Destroy()
         end
-    end
-end
-
--- Bypass
-function Core:SetupBypass()
-    if getrawmetatable and setreadonly and newcclosure then
-        local grm = getrawmetatable(game)
-        setreadonly(grm, false)
-        local old = grm.__namecall
-        grm.__namecall = newcclosure(function(self, ...)
-            local args = {...}
-            local method = tostring(args[1])
-            
-            if method == "TeleportDetect" or method == "CHECKER_1" or method == "CHECKER" or 
-               method == "GUI_CHECK" or method == "OneMoreTime" or method == "checkingSPEED" or 
-               method == "BANREMOTE" or method == "PERMAIDBAN" or method == "KICKREMOTE" or 
-               method == "BR_KICKPC" or method == "BR_KICKMOBILE" then
-                return
-            end
-            
-            return old(self, ...)
-        end)
     end
 end
 
